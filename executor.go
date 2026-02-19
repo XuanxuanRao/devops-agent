@@ -32,13 +32,15 @@ type CommandResult struct {
 
 // Executor 命令执行器
 type Executor struct {
-	config *Config
+	config      *Config
+	connManager *ConnectionManager
 }
 
 // NewExecutor 创建新的执行器
-func NewExecutor(config *Config) *Executor {
+func NewExecutor(config *Config, connManager *ConnectionManager) *Executor {
 	return &Executor{
-		config: config,
+		config:      config,
+		connManager: connManager,
 	}
 }
 
@@ -223,21 +225,24 @@ func (e *Executor) runCommand(command string, timeout int) (int, string, string,
 
 // sendResult 发送执行结果
 func (e *Executor) sendResult(result CommandResult) error {
-	// 这里应该使用连接管理器发送结果
-	// 由于我们在工作池中执行，需要重新创建连接
-	// 实际项目中应该将连接管理器传递给执行器
-
-	// 临时实现：打印结果
+	// 序列化结果
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Command result: %s", string(resultJSON))
+	// 构建 routing key
+	routingKey := "result.node." + e.config.Hostname
 
-	// 实际项目中应该发送到 cmd_result 队列
-	// 例如：
-	// connManager.Publish("sys_cmd_exchange", "cmd.result", resultJSON)
+	// 发送结果到消息队列
+	if e.connManager != nil {
+		if err := e.connManager.Publish("sys_result_exchange", routingKey, resultJSON); err != nil {
+			log.Printf("Failed to send result: %v", err)
+		}
+	}
+
+	// 打印结果日志
+	log.Printf("Command result sent: %s", string(resultJSON))
 
 	return nil
 }

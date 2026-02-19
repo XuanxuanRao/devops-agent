@@ -37,7 +37,7 @@ func (a *Agent) Start() error {
 	a.workerPool = NewWorkerPool(a.config.MaxConcurrentTasks)
 
 	// 3. 初始化心跳
-	a.heartbeat = NewHeartbeat(connManager, a.config.Hostname, 30*time.Second)
+	a.heartbeat = NewHeartbeat(connManager, a.config.Hostname, 10*time.Second)
 
 	// 4. 启动连接管理器
 	if err := connManager.Start(); err != nil {
@@ -51,8 +51,17 @@ func (a *Agent) Start() error {
 	a.workerPool.Start()
 
 	// 7. 声明交换机
+	// 命令交换机
 	if err := connManager.DeclareExchange("sys_cmd_exchange", "topic"); err != nil {
 		return fmt.Errorf("failed to declare exchange: %v", err)
+	}
+	// 结果交换机
+	if err := connManager.DeclareExchange("sys_result_exchange", "topic"); err != nil {
+		return fmt.Errorf("failed to declare result exchange: %v", err)
+	}
+	// 心跳交换机
+	if err := connManager.DeclareExchange("sys_monitor_exchange", "topic"); err != nil {
+		return fmt.Errorf("failed to declare monitor exchange: %v", err)
 	}
 
 	// 8. 绑定队列
@@ -94,7 +103,7 @@ func (a *Agent) Start() error {
 
 func (a *Agent) handleMessage(msg []byte) {
 	a.workerPool.Submit(func() {
-		executor := NewExecutor(a.config)
+		executor := NewExecutor(a.config, a.connManager)
 		if err := executor.Execute(msg); err != nil {
 			log.Printf("Error executing task: %v", err)
 		}

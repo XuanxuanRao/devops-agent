@@ -82,7 +82,7 @@ func (h *Heartbeat) sendHeartbeat() {
 	}
 
 	// 发送消息到心跳队列
-	if err := h.connManager.Publish("sys_cmd_exchange", "heartbeat", msgJSON); err != nil {
+	if err := h.connManager.Publish("sys_monitor_exchange", "heartbeat", msgJSON); err != nil {
 		log.Printf("Failed to send heartbeat: %v", err)
 		return
 	}
