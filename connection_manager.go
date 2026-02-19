@@ -8,6 +8,13 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 )
 
+// QueueBinding 队列绑定信息
+type QueueBinding struct {
+	ExchangeName string
+	RoutingKey   string
+	Handler      func([]byte)
+}
+
 // ConnectionManager 管理与 RabbitMQ 的连接
 type ConnectionManager struct {
 	url             string
@@ -16,14 +23,14 @@ type ConnectionManager struct {
 	mu              sync.Mutex
 	running         bool
 	reconnecting    bool
-	messageHandlers map[string]func([]byte)
+	messageHandlers map[string]QueueBinding
 }
 
 // NewConnectionManager 创建新的连接管理器
 func NewConnectionManager(url string) (*ConnectionManager, error) {
 	return &ConnectionManager{
 		url:             url,
-		messageHandlers: make(map[string]func([]byte)),
+		messageHandlers: make(map[string]QueueBinding),
 	}, nil
 }
 
@@ -111,8 +118,8 @@ func (cm *ConnectionManager) connect() error {
 	log.Println("Connected to RabbitMQ successfully")
 
 	// 重新绑定所有队列
-	for queueName, handler := range cm.messageHandlers {
-		if err := cm.bindQueueInternal(queueName, handler); err != nil {
+	for queueName, binding := range cm.messageHandlers {
+		if err := cm.bindQueueInternal(queueName, binding.ExchangeName, binding.RoutingKey, binding.Handler); err != nil {
 			log.Printf("Failed to rebind queue %s: %v", queueName, err)
 		}
 	}
@@ -161,17 +168,23 @@ func (cm *ConnectionManager) BindQueue(queueName, exchangeName, routingKey strin
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	cm.messageHandlers[queueName] = handler
+	// 存储队列的绑定信息
+	binding := QueueBinding{
+		ExchangeName: exchangeName,
+		RoutingKey:   routingKey,
+		Handler:      handler,
+	}
+	cm.messageHandlers[queueName] = binding
 
 	if cm.ch == nil {
 		return nil // 连接建立后会自动绑定
 	}
 
-	return cm.bindQueueInternal(queueName, handler)
+	return cm.bindQueueInternal(queueName, exchangeName, routingKey, handler)
 }
 
 // bindQueueInternal 内部绑定队列方法
-func (cm *ConnectionManager) bindQueueInternal(queueName string, handler func([]byte)) error {
+func (cm *ConnectionManager) bindQueueInternal(queueName, exchangeName, routingKey string, handler func([]byte)) error {
 	// 声明队列
 	q, err := cm.ch.QueueDeclare(
 		queueName,
@@ -188,8 +201,8 @@ func (cm *ConnectionManager) bindQueueInternal(queueName string, handler func([]
 	// 绑定队列到交换机
 	err = cm.ch.QueueBind(
 		q.Name,
-		"", // routing key will be set when binding
-		"sys_cmd_exchange",
+		routingKey,
+		exchangeName,
 		false,
 		nil,
 	)
