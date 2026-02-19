@@ -1,0 +1,26 @@
+{
+  "rabbitmq_url": "amqp://joinup:123456@localhost:5672/",
+  "hostname": "macbook-m4-pc",
+  "group": "test_group",
+  "max_concurrent_tasks": 3,
+  "command_timeout": 120,
+  "allowed_commands": [
+    "ls",
+    "pwd",
+    "echo",
+    "docker",
+    "docker-compose",
+    "systemctl",
+    "service",
+    "curl",
+    "wget"
+  ],
+  "allowed_directories": [
+    "/",
+    "/tmp",
+    "/var/tmp",
+    "/home",
+    "/data",
+    "/etc"
+  ]
+}
