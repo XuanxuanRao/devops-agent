@@ -6,8 +6,13 @@ import (
 
 // Config 定义 Agent 配置
 type Config struct {
-	// RabbitMQ 连接 URL
-	RabbitMQURL string
+	// RabbitMQ 连接配置
+	RabbitMQURL      string `json:"rabbitmq_url,omitempty"`
+	RabbitMQHost     string `json:"rabbitmq_host"`
+	RabbitMQPort     int    `json:"rabbitmq_port"`
+	RabbitMQUsername string `json:"rabbitmq_username"`
+	RabbitMQPassword string `json:"rabbitmq_password"`
+	RabbitMQVhost    string `json:"rabbitmq_vhost"`
 
 	// 主机名，用于队列命名和路由键
 	Hostname string

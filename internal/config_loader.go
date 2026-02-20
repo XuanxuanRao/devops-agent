@@ -11,18 +11,21 @@ import (
 
 // ConfigFile 配置文件格式
 type ConfigFile struct {
-	RabbitMQURL        string   `json:"rabbitmq_url"`
+	RabbitMQHost       string   `json:"rabbitmq_host"`
+	RabbitMQPort       int      `json:"rabbitmq_port"`
+	RabbitMQUsername   string   `json:"rabbitmq_username"`
+	RabbitMQPassword   string   `json:"rabbitmq_password"`
+	RabbitMQVhost      string   `json:"rabbitmq_vhost"`
 	Hostname           string   `json:"hostname"`
 	Group              string   `json:"group"`
 	MaxConcurrentTasks int      `json:"max_concurrent_tasks"`
 	CommandTimeout     int      `json:"command_timeout"`
 	AllowedCommands    []string `json:"allowed_commands"`
 	HeartbeatInterval  int      `json:"heartbeat_interval,omitempty"`
-
-	PrivateKeyPath  string `json:"private_key_path,omitempty"`
-	PublicKeyPath   string `json:"public_key_path,omitempty"`
-	EnableSignature bool   `json:"enable_signature,omitempty"`
-	ConfigPath      string `json:"config_path,omitempty"`
+	PrivateKeyPath     string   `json:"private_key_path,omitempty"`
+	PublicKeyPath      string   `json:"public_key_path,omitempty"`
+	EnableSignature    bool     `json:"enable_signature,omitempty"`
+	ConfigPath         string   `json:"config_path,omitempty"`
 }
 
 // LoadConfig 从配置文件和环境变量加载配置
@@ -104,9 +107,34 @@ func LoadConfig() (*Config, error) {
 		heartbeatInterval = time.Duration(configFile.HeartbeatInterval) * time.Second
 	}
 
+	// 处理RabbitMQ配置
+	rabbitMQHost := getEnvOrDefault("RABBITMQ_HOST", configFile.RabbitMQHost, "localhost")
+	rabbitMQPort := getEnvIntOrDefault("RABBITMQ_PORT", configFile.RabbitMQPort, 5672)
+	rabbitMQUsername := getEnvOrDefault("RABBITMQ_USERNAME", configFile.RabbitMQUsername, "guest")
+	rabbitMQPassword := getEnvOrDefault("RABBITMQ_PASSWORD", configFile.RabbitMQPassword, "guest")
+	rabbitMQVhost := getEnvOrDefault("RABBITMQ_VHOST", configFile.RabbitMQVhost, "/")
+
+	rabbitMQURL := ""
+	// 构建正确的vhost路径，避免连续斜杠
+	vhostPath := rabbitMQVhost
+	if vhostPath == "/" {
+		// 如果vhost是根目录，只需要一个斜杠
+		rabbitMQURL = fmt.Sprintf("amqp://%s:%s@%s:%d/",
+			rabbitMQUsername, rabbitMQPassword, rabbitMQHost, rabbitMQPort)
+	} else {
+		// 如果vhost不是根目录，添加一个斜杠
+		rabbitMQURL = fmt.Sprintf("amqp://%s:%s@%s:%d/%s",
+			rabbitMQUsername, rabbitMQPassword, rabbitMQHost, rabbitMQPort, vhostPath)
+	}
+
 	// 构建最终配置
 	config := &Config{
-		RabbitMQURL:        getEnvOrDefault("RABBITMQ_URL", configFile.RabbitMQURL, "amqp://guest:guest@localhost:5672/"),
+		RabbitMQURL:        rabbitMQURL,
+		RabbitMQHost:       rabbitMQHost,
+		RabbitMQPort:       rabbitMQPort,
+		RabbitMQUsername:   rabbitMQUsername,
+		RabbitMQPassword:   rabbitMQPassword,
+		RabbitMQVhost:      rabbitMQVhost,
 		Hostname:           getEnvOrDefault("AGENT_HOSTNAME", hostname, hostname),
 		Group:              getEnvOrDefault("AGENT_GROUP", configFile.Group, ""),
 		MaxConcurrentTasks: getEnvIntOrDefault("AGENT_MAX_TASKS", configFile.MaxConcurrentTasks, 5),

@@ -16,19 +16,19 @@ build: test linux macos windows
 linux:
 	@mkdir -p $(OUTPUT_DIR)/linux
 	# 针对 Linux 服务器编译
-	GOOS=linux GOARCH=amd64 go build -o $(OUTPUT_DIR)/linux/$(BINARY) ./...
+	GOOS=linux GOARCH=amd64 go build -o $(OUTPUT_DIR)/linux/$(BINARY) main.go
 
 # macOS 构建目标
 macos:
 	@mkdir -p $(OUTPUT_DIR)/macos
 	# 针对 macOS 编译
-	GOOS=darwin GOARCH=amd64 go build -o $(OUTPUT_DIR)/macos/$(BINARY) ./...
+	GOOS=darwin GOARCH=amd64 go build -o $(OUTPUT_DIR)/macos/$(BINARY) main.go
 
 # Windows 构建目标
 windows:
 	@mkdir -p $(OUTPUT_DIR)/windows
 	# 针对 Windows 编译
-	GOOS=windows GOARCH=amd64 go build -o $(OUTPUT_DIR)/windows/$(BINARY).exe ./...
+	GOOS=windows GOARCH=amd64 go build -o $(OUTPUT_DIR)/windows/$(BINARY).exe main.go
 
 # 测试目标
 test:
