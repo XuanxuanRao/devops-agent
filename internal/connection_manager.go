@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"log"
@@ -18,19 +18,23 @@ type QueueBinding struct {
 // ConnectionManager 管理与 RabbitMQ 的连接
 type ConnectionManager struct {
 	url             string
+	hostname        string
 	conn            *amqp091.Connection
 	ch              *amqp091.Channel
 	mu              sync.Mutex
 	running         bool
 	reconnecting    bool
 	messageHandlers map[string]QueueBinding
+	signer          MessageSigner
 }
 
 // NewConnectionManager 创建新的连接管理器
-func NewConnectionManager(url string) (*ConnectionManager, error) {
+func NewConnectionManager(url string, hostname string, signer MessageSigner) (*ConnectionManager, error) {
 	return &ConnectionManager{
 		url:             url,
+		hostname:        hostname,
 		messageHandlers: make(map[string]QueueBinding),
+		signer:          signer,
 	}, nil
 }
 
@@ -227,11 +231,37 @@ func (cm *ConnectionManager) bindQueueInternal(queueName, exchangeName, routingK
 	// 处理消息
 	go func() {
 		for msg := range msg {
+			// 如果启用了签名，验证消息签名
+			if cm.signer != nil {
+				// 从消息头中获取签名和时间戳
+				signature := ""
+				timestamp := int64(0)
+
+				if msg.Headers != nil {
+					if sig, ok := msg.Headers["x-signature"].(string); ok {
+						signature = sig
+					}
+					if ts, ok := msg.Headers["x-timestamp"].(int32); ok {
+						timestamp = int64(ts)
+					}
+				}
+
+				// 验证签名
+				valid, err := cm.signer.Verify(cm.hostname, signature, timestamp)
+				if err != nil || !valid {
+					log.Printf("Invalid message signature: %v", err)
+					err := msg.Nack(false, false)
+					if err != nil {
+						log.Printf("Failed to nack message: %v", err)
+					}
+					continue
+				}
+			}
+
 			handler(msg.Body)
 			err := msg.Ack(false)
 			if err != nil {
-				log.Printf("Failed to acknowledge message: %v", err)
-				return
+				log.Printf("Failed to ack message: %v", err)
 			}
 		}
 	}()
@@ -248,6 +278,20 @@ func (cm *ConnectionManager) Publish(exchange, routingKey string, msg []byte) er
 		return amqp091.ErrClosed
 	}
 
+	// 创建消息头
+	headers := make(amqp091.Table)
+
+	// 如果启用了签名，对消息进行签名并添加到头部
+	if cm.signer != nil {
+		signature, timestamp, err := cm.signer.Sign(cm.hostname)
+		if err != nil {
+			log.Printf("Warning: Failed to sign message: %v", err)
+		} else if signature != "" {
+			headers["x-signature"] = signature
+			headers["x-timestamp"] = timestamp
+		}
+	}
+
 	return cm.ch.Publish(
 		exchange,
 		routingKey,
@@ -256,6 +300,7 @@ func (cm *ConnectionManager) Publish(exchange, routingKey string, msg []byte) er
 		amqp091.Publishing{
 			ContentType: "application/json",
 			Body:        msg,
+			Headers:     headers,
 		},
 	)
 }

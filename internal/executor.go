@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"encoding/json"
@@ -17,7 +17,6 @@ type CommandMessage struct {
 	Timeout   int    `json:"timeout"`
 	User      string `json:"user"`
 	Timestamp int64  `json:"timestamp"`
-	Signature string `json:"signature"`
 }
 
 // CommandResult 命令执行结果
@@ -124,59 +123,7 @@ func (e *Executor) isCommandAllowed(command string) bool {
 		}
 	}
 
-	// 检查目录白名单
-	if !e.isPathAllowed(command) {
-		return false
-	}
-
 	return true
-}
-
-// isPathAllowed 检查命令中使用的路径是否在白名单中
-func (e *Executor) isPathAllowed(command string) bool {
-	// 简单的路径提取和检查
-	// 注意：这只是一个基本实现，实际应用中可能需要更复杂的路径解析
-	cmdParts := strings.Fields(command)
-
-	for i, part := range cmdParts {
-		// 跳过命令本身
-		if i == 0 {
-			continue
-		}
-
-		// 跳过选项参数
-		if strings.HasPrefix(part, "-") {
-			continue
-		}
-
-		// 检查是否是路径
-		if strings.HasPrefix(part, "/") {
-			// 检查路径是否在白名单中
-			if !e.isDirectoryAllowed(part) {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
-// isDirectoryAllowed 检查目录是否在白名单中
-func (e *Executor) isDirectoryAllowed(path string) bool {
-	// 规范化路径
-	path = strings.TrimSuffix(path, "/")
-
-	// 检查路径是否在白名单中
-	for _, allowedDir := range e.config.AllowedDirectories {
-		allowedDir = strings.TrimSuffix(allowedDir, "/")
-
-		// 如果路径是白名单目录的子目录，或者完全匹配
-		if path == allowedDir || strings.HasPrefix(path, allowedDir+"/") {
-			return true
-		}
-	}
-
-	return false
 }
 
 // runCommand 运行系统命令

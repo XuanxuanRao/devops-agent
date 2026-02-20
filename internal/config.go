@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"time"
@@ -24,6 +24,11 @@ type Config struct {
 	// 指令类型白名单
 	AllowedCommands []string
 
-	// 目录白名单
-	AllowedDirectories []string
+	// 心跳频率（秒）
+	HeartbeatInterval time.Duration
+
+	// 签名配置
+	PrivateKeyPath  string `json:"private_key_path,omitempty"`
+	PublicKeyPath   string `json:"public_key_path,omitempty"`
+	EnableSignature bool   `json:"enable_signature,omitempty"`
 }

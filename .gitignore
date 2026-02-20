@@ -1,3 +1,5 @@
 .idea/
 .trae/
 /bin/
+/agent
+/secret/

@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"os"
@@ -49,7 +49,7 @@ func Test_LoadConfig_Correct(t *testing.T) {
 	assert.Equal(t, 10, config.MaxConcurrentTasks)
 	assert.Equal(t, 60*time.Second, config.CommandTimeout)
 	assert.Equal(t, []string{"ls", "pwd"}, config.AllowedCommands)
-	assert.Equal(t, []string{"/tmp", "/data"}, config.AllowedDirectories)
+
 }
 
 // Test_LoadConfig_NoConfigFile 测试没有配置文件时的默认值
@@ -87,7 +87,7 @@ func Test_LoadConfig_NoConfigFile(t *testing.T) {
 	assert.Equal(t, 5, config.MaxConcurrentTasks)
 	assert.Equal(t, 300*time.Second, config.CommandTimeout)
 	assert.NotEmpty(t, config.AllowedCommands)
-	assert.NotEmpty(t, config.AllowedDirectories)
+
 }
 
 // Test_LoadConfig_EnvironmentVariables 测试环境变量覆盖配置文件

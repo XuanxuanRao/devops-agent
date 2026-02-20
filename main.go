@@ -6,17 +6,18 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
+
+	"devops-agent/internal"
 )
 
 type Agent struct {
-	connManager *ConnectionManager
-	workerPool  *WorkerPool
-	heartbeat   *Heartbeat
-	config      *Config
+	connManager *internal.ConnectionManager
+	workerPool  *internal.WorkerPool
+	heartbeat   *internal.Heartbeat
+	config      *internal.Config
 }
 
-func NewAgent(config *Config) *Agent {
+func NewAgent(config *internal.Config) *Agent {
 	return &Agent{
 		config: config,
 	}
@@ -26,31 +27,46 @@ func (a *Agent) Start() error {
 	// 生成节点队列名称
 	nodeQueueName := fmt.Sprintf("cmd.node.%s", a.config.Hostname)
 
-	// 1. 初始化连接管理器
-	connManager, err := NewConnectionManager(a.config.RabbitMQURL)
+	// 1. 创建消息签名器
+	var signer internal.MessageSigner
+	if a.config.EnableSignature {
+		var err error
+		signer, err = internal.NewRSAMessageSigner(
+			a.config.PrivateKeyPath,
+			a.config.PublicKeyPath,
+			a.config.EnableSignature,
+		)
+		if err != nil {
+			log.Printf("Warning: Failed to create message signer: %v", err)
+			// 即使创建失败，也继续启动
+		}
+	}
+
+	// 2. 初始化连接管理器
+	connManager, err := internal.NewConnectionManager(a.config.RabbitMQURL, a.config.Hostname, signer)
 	if err != nil {
 		return fmt.Errorf("failed to create connection manager: %v", err)
 	}
 	a.connManager = connManager
 
-	// 2. 初始化工作池
-	a.workerPool = NewWorkerPool(a.config.MaxConcurrentTasks)
+	// 3. 初始化工作池
+	a.workerPool = internal.NewWorkerPool(a.config.MaxConcurrentTasks)
 
-	// 3. 初始化心跳
-	a.heartbeat = NewHeartbeat(connManager, a.config.Hostname, 10*time.Second)
+	// 4. 初始化心跳
+	a.heartbeat = internal.NewHeartbeat(connManager, a.config.Hostname, a.config.HeartbeatInterval)
 
-	// 4. 启动连接管理器
+	// 5. 启动连接管理器
 	if err := connManager.Start(); err != nil {
 		return fmt.Errorf("failed to start connection manager: %v", err)
 	}
 
-	// 5. 启动心跳
+	// 6. 启动心跳
 	a.heartbeat.Start()
 
-	// 6. 启动工作池
+	// 7. 启动工作池
 	a.workerPool.Start()
 
-	// 7. 声明交换机
+	// 8. 声明交换机
 	// 命令交换机
 	if err := connManager.DeclareExchange("sys_cmd_exchange", "topic"); err != nil {
 		return fmt.Errorf("failed to declare exchange: %v", err)
@@ -64,7 +80,7 @@ func (a *Agent) Start() error {
 		return fmt.Errorf("failed to declare monitor exchange: %v", err)
 	}
 
-	// 8. 绑定队列
+	// 9. 绑定队列
 	// 单机队列
 	if err := connManager.BindQueue(
 		nodeQueueName,
@@ -103,7 +119,7 @@ func (a *Agent) Start() error {
 
 func (a *Agent) handleMessage(msg []byte) {
 	a.workerPool.Submit(func() {
-		executor := NewExecutor(a.config, a.connManager)
+		executor := internal.NewExecutor(a.config, a.connManager)
 		if err := executor.Execute(msg); err != nil {
 			log.Printf("Error executing task: %v", err)
 		}
@@ -128,7 +144,7 @@ func (a *Agent) Stop() {
 
 func main() {
 	// 加载配置
-	config, err := LoadConfig()
+	config, err := internal.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}

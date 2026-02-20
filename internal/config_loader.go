@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"encoding/json"
@@ -17,8 +17,12 @@ type ConfigFile struct {
 	MaxConcurrentTasks int      `json:"max_concurrent_tasks"`
 	CommandTimeout     int      `json:"command_timeout"`
 	AllowedCommands    []string `json:"allowed_commands"`
-	AllowedDirectories []string `json:"allowed_directories"`
-	ConfigPath         string   `json:"config_path,omitempty"`
+	HeartbeatInterval  int      `json:"heartbeat_interval,omitempty"`
+
+	PrivateKeyPath  string `json:"private_key_path,omitempty"`
+	PublicKeyPath   string `json:"public_key_path,omitempty"`
+	EnableSignature bool   `json:"enable_signature,omitempty"`
+	ConfigPath      string `json:"config_path,omitempty"`
 }
 
 // LoadConfig 从配置文件和环境变量加载配置
@@ -82,31 +86,22 @@ func LoadConfig() (*Config, error) {
 		"wget",
 	}
 
-	// 默认目录白名单
-	defaultAllowedDirectories := []string{
-		"/",
-		"/tmp",
-		"/var/tmp",
-		"/home",
-		"/data",
-		"/etc",
-	}
-
 	// 如果配置文件中没有指定白名单，使用默认值
 	allowedCommands := configFile.AllowedCommands
 	if len(allowedCommands) == 0 {
 		allowedCommands = defaultAllowedCommands
 	}
 
-	allowedDirectories := configFile.AllowedDirectories
-	if len(allowedDirectories) == 0 {
-		allowedDirectories = defaultAllowedDirectories
-	}
-
 	// 处理命令超时
 	commandTimeout := 300 * time.Second
 	if configFile.CommandTimeout > 0 {
 		commandTimeout = time.Duration(configFile.CommandTimeout) * time.Second
+	}
+
+	// 处理心跳频率
+	heartbeatInterval := 30 * time.Second
+	if configFile.HeartbeatInterval > 0 {
+		heartbeatInterval = time.Duration(configFile.HeartbeatInterval) * time.Second
 	}
 
 	// 构建最终配置
@@ -117,7 +112,10 @@ func LoadConfig() (*Config, error) {
 		MaxConcurrentTasks: getEnvIntOrDefault("AGENT_MAX_TASKS", configFile.MaxConcurrentTasks, 5),
 		CommandTimeout:     getEnvDurationOrDefault("AGENT_TIMEOUT", commandTimeout, 300*time.Second),
 		AllowedCommands:    allowedCommands,
-		AllowedDirectories: allowedDirectories,
+		HeartbeatInterval:  getEnvDurationOrDefault("AGENT_HEARTBEAT_INTERVAL", heartbeatInterval, 10*time.Second),
+		PrivateKeyPath:     getEnvOrDefault("AGENT_PRIVATE_KEY", configFile.PrivateKeyPath, ""),
+		PublicKeyPath:      getEnvOrDefault("AGENT_PUBLIC_KEY", configFile.PublicKeyPath, ""),
+		EnableSignature:    configFile.EnableSignature,
 	}
 
 	return config, nil

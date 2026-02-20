@@ -1,5 +1,5 @@
 {
-  "rabbitmq_url": "amqp://joinup:123456@localhost:5672/",
+  "rabbitmq_url": "amqp://rabbitmq:123456@localhost:15272/",
   "hostname": "macbook-m4-pc",
   "group": "test_group",
   "max_concurrent_tasks": 3,
@@ -13,14 +13,12 @@
     "systemctl",
     "service",
     "curl",
-    "wget"
+    "wget",
+    "cat",
+    "mkdir"
   ],
-  "allowed_directories": [
-    "/",
-    "/tmp",
-    "/var/tmp",
-    "/home",
-    "/data",
-    "/etc"
-  ]
+  "heartbeat_interval": 5,
+  "private_key_path": "/Users/rcx/code/go/devops-agent/secret/private.pem",
+  "public_key_path": "/Users/rcx/code/go/devops-agent/secret/public-server.pem",
+  "enable_signature": true
 }

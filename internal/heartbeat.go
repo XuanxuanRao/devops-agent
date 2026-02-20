@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"encoding/json"
@@ -86,8 +86,6 @@ func (h *Heartbeat) sendHeartbeat() {
 		log.Printf("Failed to send heartbeat: %v", err)
 		return
 	}
-
-	log.Printf("Heartbeat sent: CPU=%.2f%%, Mem=%.2f%%", cpuUsage, memUsage)
 }
 
 // getSystemResources 获取系统 CPU 和内存使用率
