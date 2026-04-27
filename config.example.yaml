@@ -1,0 +1,40 @@
+# devops-agent 配置文件示例
+#
+# 说明：
+# - 所有字段均为可选；未填写的字段会使用环境变量（AGENT_*__* 前缀）或默认值。
+# - 环境变量优先级高于本文件（双下划线表示嵌套层级）。
+# - auth.deviceToken 不会写在配置文件里，由运行期从 deviceTokenPath 自动读写。
+#
+# 环境变量对照（cleanenv 双下划线语法）：
+#   AGENT_SERVER__URL                      → server.url
+#   AGENT_KEYS__DIR                        → keys.dir
+#   AGENT_AUTH__TOKEN                      → auth.token
+#   AGENT_AUTH__DEVICE_TOKEN_PATH          → auth.deviceTokenPath
+#   AGENT_HEARTBEAT__TICK_INTERVAL_MS      → heartbeat.tickIntervalMs
+#   AGENT_SHELL__ENABLED                   → shell.enabled
+#   AGENT_SHELL__WORK_DIR                  → shell.workDir
+#   AGENT_LOGGING__LEVEL                   → logging.level
+
+server:
+  url: "ws://localhost:8000/ws"
+
+keys:
+  dir: "./keys"
+
+auth:
+  token: "change_me"
+  deviceTokenPath: "./device.token"
+
+heartbeat:
+  tickIntervalMs: 15000
+
+shell:
+  enabled: true
+  # 命令执行时的默认工作目录。
+  # - 留空则使用 agent 进程当前目录；
+  # - 支持 "~" 展开为 $HOME；
+  # - 若 server 在 command.push 中下发了 workDir，则按任务级覆盖本配置。
+  workDir: ""
+
+logging:
+  level: "info"

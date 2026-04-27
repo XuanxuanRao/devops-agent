@@ -1,5 +1,14 @@
-.idea/
-.trae/
-/bin/
+# Go agent build artifacts
 /agent
-/secret/
+agent.exe
+bin/
+keys/
+config.yaml
+*.log
+
+# Test / coverage artifacts
+coverage.out
+coverage.html
+
+# Example config (should be tracked)
+!config.example.yaml

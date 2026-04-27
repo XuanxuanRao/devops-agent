@@ -1,18 +1,17 @@
 module devops-agent
 
-go 1.26
+go 1.21
 
 require (
-	github.com/rabbitmq/amqp091-go v1.10.0
-	github.com/stretchr/testify v1.9.0
+	github.com/google/uuid v1.6.0
+	github.com/ilyakaznacheev/cleanenv v1.5.0
+	nhooyr.io/websocket v1.8.7
 )
 
 require (
-	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/go-ole/go-ole v1.2.4 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/shirou/gopsutil/v3 v3.20.10 // indirect
-	golang.org/x/sys v0.1.0 // indirect
+	github.com/BurntSushi/toml v1.2.1 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
+	github.com/klauspost/compress v1.10.3 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	olympos.io/encoding/edn v0.0.0-20201019073823-d3554ca0b0a3 // indirect
 )
