@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -150,6 +151,11 @@ func (s ShellExecutor) Run(ctx context.Context, command, workDir string, timeout
 //   - Enabled=false 时：返回单个占位 Chunk（Seq=1, Final=true, ExitCode=0）；
 //   - Enabled=true 时：按固定大小块（默认 4KB）读取 stdout/stderr，分别生成 Chunk；
 //     命令结束后追加最后一个 Final=true 的 Chunk，并携带 ExitCode。
+//
+// 超时处理：
+//   - 使用独立的 timer 控制超时，不依赖 parent ctx；
+//   - 超时后强制杀死整个进程组（避免 sh 子进程泄漏）；
+//   - 保证 final chunk 一定会被发送，通道一定会被关闭。
 func (s ShellExecutor) RunStream(ctx context.Context, command, workDir string, timeout time.Duration) <-chan Chunk {
 	ch := make(chan Chunk)
 
@@ -184,11 +190,17 @@ func (s ShellExecutor) RunStream(ctx context.Context, command, workDir string, t
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
+		// 使用独立 context，避免 parent ctx 取消直接影响命令生命周期。
+		cmdCtx, cmdCancel := context.WithTimeout(context.Background(), timeout)
+		defer cmdCancel()
 
-		cmd := exec.CommandContext(ctx, "sh", "-c", command)
+		cmd := exec.CommandContext(cmdCtx, "sh", "-c", command)
 		cmd.Dir = resolvedDir
+
+		// 创建新进程组，确保超时后可以杀死整个进程树（包括子进程）。
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+		}
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
@@ -205,6 +217,17 @@ func (s ShellExecutor) RunStream(ctx context.Context, command, workDir string, t
 			ch <- Chunk{Seq: 1, StderrChunk: fmt.Sprintf("start command error: %v", err), Final: true}
 			return
 		}
+
+		// 超时后强制杀死进程组。
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		go func() {
+			<-timer.C
+			if cmd.Process != nil {
+				// 杀死进程组（负 PID 表示进程组）。
+				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			}
+		}()
 
 		var (
 			seq int32

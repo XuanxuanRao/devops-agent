@@ -270,9 +270,12 @@ func (c *Client) readLoop(ctx context.Context) error {
 					c.logger.Printf("[ws] invalid command.push payload: %v", err)
 					continue
 				}
-				if err := c.HandleCommand(ctx, payload); err != nil {
-					c.logger.Printf("[ws] handle command error: %v", err)
-				}
+				// 命令执行放到独立 goroutine，避免阻塞 readLoop。
+				go func(p protocol.CommandPushPayload) {
+					if err := c.HandleCommand(ctx, p); err != nil {
+						c.logger.Printf("[ws] handle command error: %v", err)
+					}
+				}(payload)
 			case protocol.EventResultAck:
 				var ack protocol.ResultAckPayload
 				if err := json.Unmarshal(ev.Payload, &ack); err != nil {
