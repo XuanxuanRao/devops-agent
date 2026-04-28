@@ -16,6 +16,7 @@ import (
 	agentcrypto "devops-agent/internal/crypto"
 	agentexec "devops-agent/internal/exec"
 	"devops-agent/internal/heartbeat"
+	"devops-agent/internal/metrics"
 	"devops-agent/internal/protocol"
 )
 
@@ -156,7 +157,7 @@ func (c *Client) ConnectAndServe(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (c *Client) SendHeartbeat(ctx context.Context) error {
+func (c *Client) SendHeartbeat(ctx context.Context, snap metrics.Snapshot) error {
 	if c.conn == nil {
 		return fmt.Errorf("no active websocket connection")
 	}
@@ -164,6 +165,14 @@ func (c *Client) SendHeartbeat(ctx context.Context) error {
 	payload := protocol.HeartbeatPayload{
 		DeviceID: agentcrypto.DeviceID(c.keyPair.Public),
 		TS:       time.Now().UnixMilli(),
+		Metrics: &protocol.MetricsSnapshot{
+			CPUPercent:   snap.CPUPercent,
+			MemPercent:   snap.MemPercent,
+			MemUsed:      snap.MemUsed,
+			MemTotal:     snap.MemTotal,
+			Load1:        snap.Load1,
+			NumGoroutine: snap.NumGoroutine,
+		},
 	}
 
 	frame := protocol.EventFrame{
@@ -184,7 +193,7 @@ func (c *Client) SendHeartbeat(ctx context.Context) error {
 		return fmt.Errorf("send heartbeat: %w", err)
 	}
 
-	c.logger.Printf("[ws] sent agent.tick")
+	c.logger.Printf("[ws] sent agent.tick %s", snap.String())
 	return nil
 }
 

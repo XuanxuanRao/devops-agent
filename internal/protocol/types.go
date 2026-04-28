@@ -118,8 +118,19 @@ type HelloOkPayload struct {
 
 // HeartbeatPayload 对应 agent.tick 心跳事件负载。
 type HeartbeatPayload struct {
-	DeviceID string `json:"deviceId"`
-	TS       int64  `json:"ts"`
+	DeviceID string         `json:"deviceId"`
+	TS       int64          `json:"ts"`
+	Metrics  *MetricsSnapshot `json:"metrics,omitempty"`
+}
+
+// MetricsSnapshot 描述 Agent 所在节点的资源快照，嵌入在心跳中上报。
+type MetricsSnapshot struct {
+	CPUPercent   float64 `json:"cpuPercent"`
+	MemPercent   float64 `json:"memPercent"`
+	MemUsed      uint64  `json:"memUsed"`
+	MemTotal     uint64  `json:"memTotal"`
+	Load1        float64 `json:"load1"`
+	NumGoroutine int     `json:"numGoroutine"`
 }
 
 // CommandPushPayload 对应 command.push.

@@ -3,11 +3,13 @@ package heartbeat
 import (
 	"context"
 	"time"
+
+	"devops-agent/internal/metrics"
 )
 
 // Sender 抽象出心跳发送能力，避免直接依赖具体的 WS 客户端实现。
 type Sender interface {
-	SendHeartbeat(ctx context.Context) error
+	SendHeartbeat(ctx context.Context, snap metrics.Snapshot) error
 }
 
 // Start 以给定的毫秒间隔触发心跳发送。
@@ -21,6 +23,7 @@ func Start(ctx context.Context, intervalMs int, sender Sender) {
 		intervalMs = 15000
 	}
 
+	collector := metrics.NewCollector()
 	ticker := time.NewTicker(time.Duration(intervalMs) * time.Millisecond)
 	defer ticker.Stop()
 
@@ -29,7 +32,8 @@ func Start(ctx context.Context, intervalMs int, sender Sender) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_ = sender.SendHeartbeat(ctx) // 错误可在 sender 内部记录日志即可
+			snap := collector.Collect()
+			_ = sender.SendHeartbeat(ctx, snap)
 		}
 	}
 }
