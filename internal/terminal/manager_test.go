@@ -15,6 +15,7 @@ func TestManagerOpenSessionRejectsDuplicateSessionID(t *testing.T) {
 	mgr := NewManager(Options{
 		DefaultShell:   "/bin/sh",
 		DefaultWorkDir: t.TempDir(),
+		Factory:        newFakeFactory(),
 		Sink:           noopSink{},
 		Logger:         log.New(io.Discard, "", 0),
 	})
@@ -147,11 +148,20 @@ func TestManagerRoutesInvokeSessionMethods(t *testing.T) {
 func TestManagerOpenSessionReturnsErrorIfClosedDuringStart(t *testing.T) {
 	enterStart := make(chan struct{})
 	releaseStart := make(chan struct{})
+	factory := newFakeFactory()
 
 	mgr := NewManager(Options{})
 	mgr.newSession = func(payload OpenPayload, opts sessionOptions) *Session {
 		s := newSession(payload, opts)
 		s.startFn = func(context.Context) error {
+			s.mu.Lock()
+			s.proc = PtyProcess{
+				File: factory.pty,
+				PID:  42,
+				Ref:  "pty_42",
+			}
+			s.pty = factory.pty
+			s.mu.Unlock()
 			close(enterStart)
 			<-releaseStart
 			return nil

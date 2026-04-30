@@ -130,7 +130,7 @@ func TestSessionCloseIsIdempotent(t *testing.T) {
 	}, sessionOptions{factory: factory})
 	session.closeFn = func(context.Context, string) error {
 		closeCalls++
-		return nil
+		return factory.pty.Close()
 	}
 
 	if err := session.start(context.Background()); err != nil {
@@ -170,7 +170,7 @@ func TestSessionCloseAllowsRetryAfterFailure(t *testing.T) {
 		if closeCalls == 1 {
 			return closeErr
 		}
-		return nil
+		return factory.pty.Close()
 	}
 
 	if err := session.start(context.Background()); err != nil {
@@ -222,7 +222,7 @@ func TestSessionConcurrentCloseCallsOnlyInvokeCloseFnOnce(t *testing.T) {
 			secondEntered <- struct{}{}
 		}
 		<-release
-		return nil
+		return factory.pty.Close()
 	}
 
 	if err := session.start(context.Background()); err != nil {
