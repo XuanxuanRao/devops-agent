@@ -3,6 +3,7 @@ module devops-agent
 go 1.21
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/google/uuid v1.6.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/shirou/gopsutil/v3 v3.24.5

@@ -18,6 +18,7 @@ import (
 	"devops-agent/internal/heartbeat"
 	"devops-agent/internal/metrics"
 	"devops-agent/internal/protocol"
+	"devops-agent/internal/terminal"
 )
 
 var ErrAuthRejected = errors.New("connect rejected by server: auth")
@@ -29,19 +30,37 @@ type Client struct {
 	conn          *websocket.Conn
 	onDeviceToken func(string)
 
-	executor agentexec.Executor
+	executor        agentexec.Executor
+	terminalManager terminalManager
+	sendEventFn     func(ctx context.Context, event string, payload any) error
 
 	writeMu sync.Mutex
 }
 
+type terminalManager interface {
+	OpenSession(ctx context.Context, payload terminal.OpenPayload) error
+	Write(ctx context.Context, sessionID, data string) error
+	Resize(ctx context.Context, sessionID string, cols, rows int) error
+	Signal(ctx context.Context, sessionID, signal string) error
+	Close(ctx context.Context, sessionID, reason string) error
+	CloseAll(ctx context.Context, reason string) error
+}
+
 func NewClient(cfg *agentconfig.Config, kp agentcrypto.KeyPair, logger *log.Logger, onDeviceToken func(string)) *Client {
-	return &Client{
+	client := &Client{
 		cfg:           cfg,
 		keyPair:       kp,
 		logger:        logger,
 		onDeviceToken: onDeviceToken,
 		executor:      agentexec.ShellExecutor{Enabled: cfg.Shell.Enabled, DefaultWorkDir: cfg.Shell.WorkDir},
 	}
+	client.terminalManager = terminal.NewManager(terminal.Options{
+		DefaultWorkDir: cfg.Shell.WorkDir,
+		Factory:        terminal.NewRealPtyFactory(),
+		Sink:           client,
+		Logger:         logger,
+	})
+	return client
 }
 
 func (c *Client) ConnectAndServe(ctx context.Context) error {
@@ -236,6 +255,70 @@ func (c *Client) HandleCommand(ctx context.Context, payload protocol.CommandPush
 	return nil
 }
 
+func (c *Client) CloseTerminalSessions(ctx context.Context) error {
+	if c.terminalManager == nil {
+		return nil
+	}
+	return c.terminalManager.CloseAll(ctx, "agent_closed")
+}
+
+func (c *Client) handleTerminalEvent(ctx context.Context, event string, raw json.RawMessage) error {
+	if c.terminalManager == nil {
+		return nil
+	}
+
+	switch event {
+	case protocol.EventTerminalSessionOpen:
+		var payload protocol.TerminalSessionOpenPayload
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return err
+		}
+		err := c.terminalManager.OpenSession(ctx, terminal.OpenPayload{
+			RequestID: payload.RequestID,
+			SessionID: payload.SessionID,
+			DeviceID:  payload.DeviceID,
+			Shell:     payload.Shell,
+			Cwd:       payload.Cwd,
+			Env:       payload.Env,
+			Cols:      payload.Cols,
+			Rows:      payload.Rows,
+			Title:     payload.Title,
+		})
+		if err != nil {
+			c.logger.Printf("[ws] open failed: session=%s err=%v", payload.SessionID, err)
+			return err
+		}
+		c.logger.Printf("[ws] open success: session=%s", payload.SessionID)
+		return nil
+	case protocol.EventTerminalStdinWrite:
+		var payload protocol.TerminalStdinWritePayload
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return err
+		}
+		return c.terminalManager.Write(ctx, payload.SessionID, payload.Data)
+	case protocol.EventTerminalSessionResize:
+		var payload protocol.TerminalSessionResizePayload
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return err
+		}
+		return c.terminalManager.Resize(ctx, payload.SessionID, payload.Cols, payload.Rows)
+	case protocol.EventTerminalSessionSignal:
+		var payload protocol.TerminalSessionSignalPayload
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return err
+		}
+		return c.terminalManager.Signal(ctx, payload.SessionID, payload.Signal)
+	case protocol.EventTerminalSessionClose:
+		var payload protocol.TerminalSessionClosePayload
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return err
+		}
+		return c.terminalManager.Close(ctx, payload.SessionID, payload.Reason)
+	default:
+		return nil
+	}
+}
+
 func (c *Client) readLoop(ctx context.Context) error {
 	for {
 		_, msg, err := c.conn.Read(ctx)
@@ -283,6 +366,14 @@ func (c *Client) readLoop(ctx context.Context) error {
 					continue
 				}
 				c.logger.Printf("[ws] received result.ack: task=%s seq=%d", ack.TaskUUID, ack.Seq)
+			case protocol.EventTerminalSessionOpen,
+				protocol.EventTerminalStdinWrite,
+				protocol.EventTerminalSessionResize,
+				protocol.EventTerminalSessionSignal,
+				protocol.EventTerminalSessionClose:
+				if err := c.handleTerminalEvent(ctx, ev.Event, ev.Payload); err != nil {
+					c.logger.Printf("[ws] handle %s error: %v", ev.Event, err)
+				}
 			case "disconnect":
 				c.logger.Printf("[ws] received disconnect event, closing")
 				return nil
@@ -293,6 +384,51 @@ func (c *Client) readLoop(ctx context.Context) error {
 			c.logger.Printf("[ws] ignore frame type=%s", base.Type)
 		}
 	}
+}
+
+func (c *Client) EmitSessionOpened(ctx context.Context, payload protocol.TerminalSessionOpenedPayload) error {
+	return c.sendEvent(ctx, protocol.EventTerminalSessionOpened, payload)
+}
+
+func (c *Client) EmitStdoutChunk(ctx context.Context, payload protocol.TerminalStdoutChunkPayload) error {
+	return c.sendEvent(ctx, protocol.EventTerminalStdoutChunk, payload)
+}
+
+func (c *Client) EmitSessionState(ctx context.Context, payload protocol.TerminalSessionStatePayload) error {
+	return c.sendEvent(ctx, protocol.EventTerminalSessionState, payload)
+}
+
+func (c *Client) EmitSessionClosed(ctx context.Context, payload protocol.TerminalSessionClosedPayload) error {
+	return c.sendEvent(ctx, protocol.EventTerminalSessionClosed, payload)
+}
+
+func (c *Client) EmitSessionError(ctx context.Context, payload protocol.TerminalSessionErrorPayload) error {
+	return c.sendEvent(ctx, protocol.EventTerminalSessionError, payload)
+}
+
+func (c *Client) sendEvent(ctx context.Context, event string, payload any) error {
+	if c.sendEventFn != nil {
+		return c.sendEventFn(ctx, event, payload)
+	}
+	if c.conn == nil {
+		return fmt.Errorf("no active websocket connection")
+	}
+
+	frame := protocol.EventFrame{
+		Type:    protocol.FrameTypeEvent,
+		Event:   event,
+		Payload: payload,
+	}
+
+	data, err := json.Marshal(frame)
+	if err != nil {
+		return err
+	}
+
+	c.writeMu.Lock()
+	err = c.conn.Write(ctx, websocket.MessageText, data)
+	c.writeMu.Unlock()
+	return err
 }
 
 func (c *Client) sendResultChunk(ctx context.Context, payload protocol.ResultChunkPayload) error {

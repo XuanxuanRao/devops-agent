@@ -7,11 +7,21 @@ const (
 	FrameTypeRequest  = "req"
 	FrameTypeResponse = "res"
 
-	EventConnectChallenge = "connect.challenge"
-	EventAgentTick        = "agent.tick"
-	EventCommandPush      = "command.push"
-	EventResultChunk      = "result.chunk"
-	EventResultAck        = "result.ack"
+	EventConnectChallenge      = "connect.challenge"
+	EventAgentTick             = "agent.tick"
+	EventCommandPush           = "command.push"
+	EventResultChunk           = "result.chunk"
+	EventResultAck             = "result.ack"
+	EventTerminalSessionOpen   = "terminal.session.open"
+	EventTerminalSessionOpened = "terminal.session.opened"
+	EventTerminalStdinWrite    = "terminal.stdin.write"
+	EventTerminalStdoutChunk   = "terminal.stdout.chunk"
+	EventTerminalSessionResize = "terminal.session.resize"
+	EventTerminalSessionSignal = "terminal.session.signal"
+	EventTerminalSessionState  = "terminal.session.state"
+	EventTerminalSessionClose  = "terminal.session.close"
+	EventTerminalSessionClosed = "terminal.session.closed"
+	EventTerminalSessionError  = "terminal.session.error"
 
 	MethodConnect = "connect"
 )
@@ -118,8 +128,8 @@ type HelloOkPayload struct {
 
 // HeartbeatPayload 对应 agent.tick 心跳事件负载。
 type HeartbeatPayload struct {
-	DeviceID string         `json:"deviceId"`
-	TS       int64          `json:"ts"`
+	DeviceID string           `json:"deviceId"`
+	TS       int64            `json:"ts"`
 	Metrics  *MetricsSnapshot `json:"metrics,omitempty"`
 }
 
@@ -169,4 +179,89 @@ type ResultAckPayload struct {
 	AgentID    string `json:"agentId"`
 	Seq        int    `json:"seq"`
 	ReceivedAt int64  `json:"receivedAt"`
+}
+
+// TerminalSessionOpenPayload 对应 terminal.session.open 事件负载。
+type TerminalSessionOpenPayload struct {
+	RequestID string            `json:"requestId"`
+	SessionID string            `json:"sessionId"`
+	DeviceID  string            `json:"deviceId"`
+	Shell     string            `json:"shell"`
+	Cwd       string            `json:"cwd"`
+	Env       map[string]string `json:"env,omitempty"`
+	Cols      int               `json:"cols"`
+	Rows      int               `json:"rows"`
+	Title     string            `json:"title"`
+}
+
+// TerminalSessionOpenedPayload 对应 terminal.session.opened 事件负载。
+type TerminalSessionOpenedPayload struct {
+	RequestID       string `json:"requestId"`
+	SessionID       string `json:"sessionId"`
+	AgentSessionRef string `json:"agentSessionRef"`
+	ShellPID        int    `json:"shellPid"`
+	Cwd             string `json:"cwd"`
+	Title           string `json:"title"`
+}
+
+// TerminalStdinWritePayload 对应 terminal.stdin.write 事件负载。
+type TerminalStdinWritePayload struct {
+	SessionID string `json:"sessionId"`
+	Data      string `json:"data"`
+}
+
+// TerminalSessionResizePayload 对应 terminal.session.resize 事件负载。
+type TerminalSessionResizePayload struct {
+	SessionID string `json:"sessionId"`
+	Cols      int    `json:"cols"`
+	Rows      int    `json:"rows"`
+}
+
+// TerminalSessionSignalPayload 对应 terminal.session.signal 事件负载。
+type TerminalSessionSignalPayload struct {
+	SessionID string `json:"sessionId"`
+	Signal    string `json:"signal"`
+}
+
+// TerminalSessionClosePayload 对应 terminal.session.close 事件负载。
+type TerminalSessionClosePayload struct {
+	SessionID string `json:"sessionId"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// TerminalStdoutChunkPayload 对应 terminal.stdout.chunk 事件负载。
+type TerminalStdoutChunkPayload struct {
+	SessionID string `json:"sessionId"`
+	Seq       uint64 `json:"seq"`
+	Stream    string `json:"stream"`
+	Data      string `json:"data"`
+	Cwd       string `json:"cwd,omitempty"`
+	Title     string `json:"title,omitempty"`
+	IsBinary  bool   `json:"isBinary"`
+}
+
+// TerminalSessionStatePayload 对应 terminal.session.state 事件负载。
+type TerminalSessionStatePayload struct {
+	SessionID string `json:"sessionId"`
+	Status    string `json:"status"`
+	Title     string `json:"title"`
+	Cwd       string `json:"cwd,omitempty"`
+	Cols      int    `json:"cols"`
+	Rows      int    `json:"rows"`
+	Seq       uint64 `json:"seq"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+// TerminalSessionClosedPayload 对应 terminal.session.closed 事件负载。
+type TerminalSessionClosedPayload struct {
+	SessionID string `json:"sessionId"`
+	ExitCode  *int   `json:"exitCode,omitempty"`
+	Reason    string `json:"reason"`
+}
+
+// TerminalSessionErrorPayload 对应 terminal.session.error 事件负载。
+type TerminalSessionErrorPayload struct {
+	SessionID string `json:"sessionId"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
 }

@@ -25,6 +25,17 @@ const (
 	reconnectJitterFraction = 0.2
 )
 
+type serviceClient interface {
+	ConnectAndServe(ctx context.Context) error
+	CloseTerminalSessions(ctx context.Context) error
+}
+
+var defaultNewServiceClient = func(cfg *agentconfig.Config, keyPair agentcrypto.KeyPair, logger *log.Logger, onDeviceToken func(string)) serviceClient {
+	return ws.NewClient(cfg, keyPair, logger, onDeviceToken)
+}
+
+var newServiceClient = defaultNewServiceClient
+
 func main() {
 	if err := run(context.Background(), os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		log.New(os.Stderr, "", log.LstdFlags).Println(err)
@@ -67,8 +78,11 @@ func serveWithReconnect(ctx context.Context, cfg *agentconfig.Config, keyPair ag
 			return err
 		}
 
-		client := ws.NewClient(cfg, keyPair, logger, newDeviceTokenHandler(cfg.Auth.DeviceTokenPath, cfg, logger))
+		client := newServiceClient(cfg, keyPair, logger, newDeviceTokenHandler(cfg.Auth.DeviceTokenPath, cfg, logger))
 		err := client.ConnectAndServe(ctx)
+		if closeErr := client.CloseTerminalSessions(context.Background()); closeErr != nil {
+			logger.Printf("[agent] close terminal sessions error: %v", closeErr)
+		}
 
 		if err == nil || errors.Is(err, context.Canceled) {
 			return nil

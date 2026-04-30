@@ -238,3 +238,32 @@ Agent 启动后会：
   - 切换到 Protobuf 以优化消息体积和序列化性能；
   - 实现更精细的 RBAC 权限控制与审计日志；
   - 为 QA 提供 Mock Agent、录制/回放工具和常见异常场景的测试脚本。
+
+---
+
+## Terminal Sessions
+
+当前 agent 已支持一版 terminal-session MVP，基于真实 PTY/shell 提供交互式会话能力。
+
+支持的输入事件：
+
+- `terminal.session.open`
+- `terminal.stdin.write`
+- `terminal.session.resize`
+- `terminal.session.signal`
+- `terminal.session.close`
+
+支持的输出事件：
+
+- `terminal.session.opened`
+- `terminal.stdout.chunk`
+- `terminal.session.state`
+- `terminal.session.closed`
+- `terminal.session.error`
+
+当前限制：
+
+- 不支持 `afterSeq` 回放
+- 不支持 attach/reconnect 输出缓存
+- 不支持多客户端附着计数
+- `cwd` 与 `title` 仅维护最近已知值
